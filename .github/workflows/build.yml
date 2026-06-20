@@ -1,0 +1,47 @@
+name: Build Marauder Firmware
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.14
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "ArduinoJson@6.21.3"
+          arduino-cli lib install "PNGdec"
+
+      - name: Install TFT_eSPI and apply custom config
+        run: |
+          arduino-cli lib install "TFT_eSPI"
+          TFT_ESPI_PATH=$(find ~/Arduino/libraries -iname "TFT_eSPI" -type d | head -n 1)
+          cp esp32_marauder/User_Setup.h "$TFT_ESPI_PATH/User_Setup.h"
+
+      - name: Compile firmware
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 \
+            --build-property build.partitions=default \
+            --export-binaries \
+            esp32_marauder/esp32_marauder.ino
+
+      - name: Upload binaries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: marauder-st7789-bin
+          path: esp32_marauder/build/esp32.esp32.esp32/*.bin
